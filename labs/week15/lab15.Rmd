@@ -1,0 +1,498 @@
+---
+title: "STATS306_WN23_Lab15"
+author: "Zehua Wang"
+date: "2023-04-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# STATS306 Lab15 Shiny
+
+## Introduction
+
+Shiny is an R package that makes it easy to build interactive web applications (apps)
+straight from R. Specifically, users can build web applications without needing 
+to know HTML, CSS, or JavaScript. Shiny R provides a framework for building web-based
+dashboards and applications that allow users to interact with data and perform 
+analyses in real-time, making it an ideal tool for data exploration and visualization.
+
+```{r}
+# install.packages("shiny")
+library(shiny)
+```
+
+Let's take a look at some examples
+
+```{r}
+runExample("01_hello")
+```
+
+In this example, we draw histogram of the wait time between eruptions for the Old 
+Faithful geyser in Yellowstone National Park in dataset faith. The interactive bar 
+allows us to change the number of bins of histogram.
+
+```{r}
+runExample("03_reactivity")
+```
+
+In this example, we change the caption of summary table, choose different dataset, 
+and also the number of observation for preview.
+
+```{r}
+runExample("04_mpg")
+```
+
+In this example, we generate boxplots between mpg and categorical variables including
+cylinders, transmission, and gear. We also have an option for the outlier.
+
+In this lab, we will learn how to filter and visualize data using `ncaa` dataset. 
+Before we moving on, lets clean the dataset.
+
+```{r}
+library(tidyverse)
+library(lubridate)
+ncaa <- read_csv("https://datasets.stats306.org/ncaa.csv.gz", show_col_types = FALSE)
+```
+
+## Structure
+
+The structure of a Shiny App includes:
+
+-   a user interface object
+-   a server function
+-   a call to `shinyApp` function
+
+The user interface (`ui`) object controls the layout and appearance of your app. 
+The `server` function contains the instructions that your computer needs to build 
+your app. Finally the `shinyApp` function creates Shiny app objects from an 
+explicit UI/server pair.
+
+Sample structure code:
+
+```{r}
+# Define UI ----
+ui <- fluidPage(
+  
+)
+
+# Define server logic ----
+server <- function(input, output) {
+  
+}
+
+# Run the app ----
+shinyApp(ui = ui, server = server)
+
+```
+
+Here is a useful shiny [cheat sheet](https://raw.githubusercontent.com/rstudio/cheatsheets/main/shiny.pdf)
+
+### User interface object
+
+In Shiny R, user interface (UI) is the front-end part of a Shiny app, which defines 
+the layout and appearance of the app in the web browser. The UI part is created 
+using a set of functions in `shiny` library. It can be customized to include a wide 
+range of input widgets, output elements, and HTML components.
+
+Shiny uses `fliudPage` to creates a UI that includes title panel and sidebar layout, 
+which includes sidebar panel and main panel. Run the following code and see the layout.
+
+```{r}
+# Define UI ----
+ui <- fluidPage(
+  titlePanel("title panel"),
+
+  sidebarLayout(
+    sidebarPanel("sidebar panel"),
+    mainPanel("main panel")
+  )
+)
+
+# Define server logic ----
+server <- function(input, output) {
+  
+}
+
+# Run the app ----
+shinyApp(ui = ui, server = server)
+```
+
+Shiny uses widgets as UI element that allows users to interact with the application. 
+It could be an input widget like a text box, a dropdown menu, a slider, or a button; 
+or an output widget like a plot, a table, or a text display.
+
+Here are some commonly used input widgets:
+
+-   `textInput()`: creates a single-line text input field.
+-   `textareaInput()`: creates a multi-line text input field.
+-   `numericInput()`: creates a numeric input field.
+-   `selectInput()`: creates a dropdown menu to select a single item from a list of choices.
+-   `selectizeInput()`: creates a searchable dropdown menu to select a single item from a list of choices.
+-   `checkboxInput()`: creates a single checkbox.
+-   `checkboxGroupInput()`: creates a group of checkboxes.
+-   `radioButtons()`: creates a group of radio buttons to select a single item from a list of choices.
+-   `sliderInput()`: creates a slider to select a numeric value within a range.
+
+You can check the usage of shiny widgets in the [gallery](https://shiny.rstudio.com/gallery/widget-gallery.html).
+
+Let's creates some widgets for filtering NCAA data.
+
+Use `sliderInput()` to select the range of year. We need to specify the `inputId`, `label` of widget, `min` and `max`. `value` used as default input value.
+
+```{r}
+sliderInput(inputId="years", label = "Year Range", min = 1985,
+                           max = 2016, value = c(1990, 2010))
+```
+
+Use `selectInput()` to select teams. Similar to `sliderInput()`, we need to specify `choices`. `selected` used as default input value.
+
+```{r}
+selectInput("team2", label = "Select Team", choices = unique(c(ncaa$Winner,  ncaa$Loser)),
+                           selected = "Michigan")
+```
+
+However, it takes time to find the team in drop down menu when there are many teams. 
+In this case, you may consider to use `selectizeInput()`. It allows user to select one 
+or multiple options from a list of choices. It creates an auto-complete search box 
+that filters the choices based on the user input.
+
+```{r}
+selectizeInput(
+   inputId = "team1", 
+   label = "Search Team",
+   choices = unique(c(ncaa$Winner,  ncaa$Loser)),
+   options = list(
+     placeholder = "Search Team",
+     maxItems = '1',
+     onDropdownOpen = I("function($dropdown) {if (!this.lastQuery.length) {this.close(); this.settings.openOnFocus = false;}}"),
+     onType = I("function (str) {if (str === \"\") {this.close();}}")
+   ),
+   selected = "Michigan"
+ )
+```
+
+We create two ways to choose a team. Use `radioButtons()` to select the team name 
+from either `search team` or `select team`. The default choice is `search team`.
+
+```{r}
+radioButtons("team_choice", label = "Which team",
+                            choices = list("Search Team" = "T1", "Select Team" = "T2"), 
+                            selected = "T1")
+
+```
+
+Use `numericInput()` to select the number of observations or rows in the summarize table.
+The default value is 5.
+
+```{r}
+numericInput("num_obs", label = "Number of Observations", value = 5)
+```
+
+Use `checkboxGroupInput()` to select the regions and round. We choose to select all by default.
+
+```{r}
+checkboxGroupInput("region", label = "Region", choices = unique(ncaa$Region),
+                                  selected = unique(ncaa$Region))
+checkboxGroupInput("round", label = "Round", choices = unique(ncaa$Round),
+                                  selected = unique(ncaa$Round))
+```
+
+Using `fluidRow` and `column` to arrange the widgets in `sidebarPanel`. Then, we create a widget input UI.
+
+```{r}
+# Define UI ----
+ui <- fluidPage(
+  titlePanel("NCAA Data"),
+  
+  sidebarLayout(
+    
+    sidebarPanel(
+      helpText("Summarize and visualize the NCAA data from 1985 to 2016"), # add brief explanation for app usage 
+      
+      fluidRow(
+        column(12,
+               # Year range
+               sliderInput("years", label = "Year Range", min = 1985,
+                           max = 2016, value = c(1990, 2010))
+        )
+      ),
+      
+      fluidRow(
+        # Team select in two ways
+        column(6, # column width must be between 1 and 12
+               selectizeInput(
+                 inputId = "team1", 
+                 label = "Search Team",
+                 choices = unique(c(ncaa$Winner,  ncaa$Loser)),
+                 options = list(
+                   placeholder = "Search Team",
+                   maxItems = '1',
+                   onDropdownOpen = I("function($dropdown) {if (!this.lastQuery.length) {this.close();
+                                      this.settings.openOnFocus = false;}}"),
+                   onType = I("function (str) {if (str === \"\") {this.close();}}")
+                 ),
+                 selected = "Michigan"
+               )
+        ),
+        
+        column(6, 
+               selectInput("team2", label = "Select Team", choices = unique(c(ncaa$Winner,  ncaa$Loser)),
+                           selected = "Michigan")
+        ),
+        
+        column(4,
+               radioButtons("team_choice", label = "Which team",
+                            choices = list("Search Team" = "T1", "Select Team" = "T2"), 
+                            selected = "T1")
+        ),
+        
+        column(7,
+               numericInput("num_obs", label = "Number of Observations", value = 5))
+      ),
+      
+      fluidRow(
+        # Select Region
+        column(6,
+               checkboxGroupInput("region", label = "Region", choices = unique(ncaa$Region),
+                                  selected = unique(ncaa$Region))
+        ),
+        # select Round
+        column(6,
+               checkboxGroupInput("round", label = "Round", choices = unique(ncaa$Round),
+                                  selected = unique(ncaa$Round))
+        )
+      )
+      
+    ),
+    
+    mainPanel("mainPanel")
+    
+  )
+)
+
+# Define server logic ----
+server <- function(input, output) {
+  
+}
+
+# Run the app ----
+shinyApp(ui = ui, server = server)
+```
+
+### Server function
+
+In Shiny R, the server function is where you define the logic of your application. 
+It contains reactive expressions and functions that control how the user input is 
+processed and how the output is rendered. The server function is executed every time 
+the user interacts with the application.
+
+Here, we use `reactive` function to create reactive expression. Reactive expression
+defines between inputs and outputs in Shiny app. When one of the inputs changes, 
+any reactive expressions that depend on that input will be invalidated and re-evaluated,
+and any outputs that depend on those reactive expressions will be updated accordingly.
+
+There are some commonly used output widgets for reactive expressions:
+
+- `renderPlot()`: creates a reactive plot.
+- `renderTable()`: creates a reactive table.
+- `renderText()`: creates a reactive text display.
+
+We will generate a table for filtered dataset using `renderTable()`, and a 
+plot of team advance in March Madness similar to homework 8 Problem 1 using
+`renderPlot()`.
+
+
+We generate a filtered table based on `input` from widgets under reactive environment.
+Pass the reactive expression to `renderTable()` and assign it to output with `outputId`
+`summarize_data`. We generally display the output in `mainPanel`
+
+Code for filtered table:
+```{r}
+server <- function(input, output) {
+  
+  filter_tb <-  reactive({
+    team <- if (input$team_choice == "T1") input$team1 else input$team2
+    tb <- ncaa %>% mutate(Year = year(mdy(Date))) %>%
+      filter(Winner == team | Loser == team) %>%
+      filter(Year >= input$years[1] & Year <= input$years[2]) %>%
+      filter(Region %in% input$region) %>%
+      filter(Round %in% input$round)
+    return(tb[1:min(dim(tb)[1], input$num_obs),])
+  })
+  output$summarize_data <- renderTable(filter_tb())
+}
+```
+
+Similarly, we generate a plot based on `input` from widgets under reactive environment.
+Pass the reactive expression to `renderPlot()` and assign it to output with `outputId`
+`plot`.
+
+Code for plot:
+```{r}
+server <- function(input, output) {
+  plot <- reactive({
+    team <- if (input$team_choice == "T1") input$team1 else input$team2
+    RoundLevel = c(unique(ncaa$Round)[7], unique(ncaa$Round)[1:6])
+    data <- ncaa %>% mutate(Year = year(mdy(Date))) %>%
+      mutate(Round = factor(Round, levels = RoundLevel, ordered=T)) %>%
+      filter(Winner == team | Loser == team) %>%
+      filter(Year >= input$years[1] & Year <= input$years[2]) %>%
+      mutate(champion = Round == "National Championship" & Winner == team) %>%
+      group_by(Year) %>% summarize(max.round = max(Round),
+            champ = ifelse(as.logical(max(champion)), "Won Championship", NA))
+    plot <- data %>% ggplot(aes(x=Year, y=max.round, fill=champ)) + geom_col(orientation="x") +
+      scale_y_discrete(drop=F) +
+      labs(x="Year", y="Furthest round reached", title=paste("March Madness results: ", team),
+           fill="") + theme_classic() + scale_fill_manual(values = "#ee3333", limits = "Won Championship")
+    return(plot)
+  })
+  output$plot <- renderPlot(plot())
+}
+```
+
+
+Commonly used display widgets are:
+
+- `plotOutput()`: creates a space to display a plot.
+- `tableOutput()`: creates a space to display a table.
+- `textOutput()`: creates a space to display text.
+
+Remember, we need to display the outputs. Add the codes in `mainPanel` in UI.
+
+```{r}
+mainPanel(
+  tableOutput("summarize_data"),
+  plotOutput("plot")
+)
+```
+
+### Call shinyApp
+
+The `shinyApp` function creates Shiny app objects from an explicit UI/server pair. 
+It is called at the end of the app to run the Shiny application,
+
+```{r}
+shinyApp(ui = ui, server = server)
+```
+
+Here is the complete code for NCAA Data shiny app:
+```{r}
+library(shiny)
+library(tidyverse)
+library(lubridate)
+
+ncaa <- read_csv("https://datasets.stats306.org/ncaa.csv.gz")
+
+ui <- fluidPage(
+  titlePanel("NCAA Data"),
+  
+  sidebarLayout(
+    
+    sidebarPanel(
+      # add brief explanation for app usage 
+      helpText("Summarize and visualize the NCAA data from 1985 to 2016"), 
+      
+      fluidRow(
+        column(12,
+               # Year range
+               sliderInput("years", label = "Year Range", min = 1985,
+                           max = 2016, value = c(1990, 2010))
+        )
+      ),
+      
+      fluidRow(
+        # Team select in two ways
+        column(6, # column width must be between 1 and 12
+               selectizeInput(
+                 inputId = "team1", 
+                 label = "Search Team",
+                 choices = unique(c(ncaa$Winner,  ncaa$Loser)),
+                 options = list(
+                   placeholder = "Search Team",
+                   maxItems = '1',
+                   onDropdownOpen = I("function($dropdown) {if (!this.lastQuery.length) {this.close();
+                                      this.settings.openOnFocus = false;}}"),
+                   onType = I("function (str) {if (str === \"\") {this.close();}}")
+                 ),
+                 selected = "Michigan"
+               )
+        ),
+        
+        column(6, 
+               selectInput("team2", label = "Select Team", choices = unique(c(ncaa$Winner,  ncaa$Loser)),
+                           selected = "Michigan")
+        ),
+        
+        column(4,
+               radioButtons("team_choice", label = "Which team",
+                            choices = list("Search Team" = "T1", "Select Team" = "T2"), 
+                            selected = "T1")
+        ),
+        
+        column(7,
+               numericInput("num_obs", label = "Number of Observations", value = 5))
+      ),
+      
+      fluidRow(
+        # Select Region
+        column(6,
+               checkboxGroupInput("region", label = "Region", choices = unique(ncaa$Region),
+                                  selected = unique(ncaa$Region))
+        ),
+        # select Round
+        column(6,
+               checkboxGroupInput("round", label = "Round", choices = unique(ncaa$Round),
+                                  selected = unique(ncaa$Round))
+        )
+      )
+      
+    ),
+    
+    mainPanel(
+      tableOutput("summarize_data"),
+      plotOutput("plot")
+    )
+    
+  )
+)
+
+# Define server logic ----
+server <- function(input, output) {
+  
+  filter_tb <-  reactive({
+    team <- if (input$team_choice == "T1") input$team1 else input$team2
+    tb <- ncaa %>% mutate(Year = year(mdy(Date))) %>%
+      filter(Winner == team | Loser == team) %>%
+      filter(Year >= input$years[1] & Year <= input$years[2]) %>%
+      filter(Region %in% input$region) %>%
+      filter(Round %in% input$round)
+    return(tb[1:min(dim(tb)[1], input$num_obs),])
+  })
+  
+  plot <- reactive({
+    team <- if (input$team_choice == "T1") input$team1 else input$team2
+    RoundLevel = c(unique(ncaa$Round)[7], unique(ncaa$Round)[1:6])
+    data <- ncaa %>% mutate(Year = year(mdy(Date))) %>%
+      mutate(Round = factor(Round, levels = RoundLevel, ordered=T)) %>%
+      filter(Winner == team | Loser == team) %>%
+      filter(Year >= input$years[1] & Year <= input$years[2]) %>%
+      mutate(champion = Round == "National Championship" & Winner == team) %>%
+      group_by(Year) %>% summarize(max.round = max(Round),
+            champ = ifelse(as.logical(max(champion)), "Won Championship", NA))
+    plot <- data %>% ggplot(aes(x=Year, y=max.round, fill=champ)) + geom_col(orientation="x") +
+      scale_y_discrete(drop=F) +
+      labs(x="Year", y="Furthest round reached", title=paste("March Madness results: ", team),
+           fill="") + theme_classic() + scale_fill_manual(values = "#ee3333", limits = "Won Championship")
+    return(plot)
+  })
+  
+  output$summarize_data <- renderTable(filter_tb())
+  output$plot <- renderPlot(plot())
+}
+
+# Run the app ----
+shinyApp(ui = ui, server = server)
+```
